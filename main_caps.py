@@ -5,14 +5,16 @@ from tqdm import tqdm
 from capsNet import CapsNet
 from utils import get_data, serialize_data, next_batch
 
+tf.logging.set_verbosity("INFO")    
 
-train_zip = "Data/train.zip"
-valid_zip = "Data/valid.zip"
-training_filename = "Data/train.p"
-validation_filename = "Data/valid.p"
-labels_filename = "Data/labels.csv.zip"
+root_dir = "/home/anne/src/dog_identification/"  
+train_zip = root_dir + "data/train.zip"
+valid_zip = root_dir + "data/valid.zip"
+training_filename = root_dir + "data/train.p"
+validation_filename = root_dir + "data/valid.p"
+labels_filename = root_dir + "data/labels.csv.zip"
 
-nbreeds = cfg.nbreeds
+nbreeds = cfg.nb_labels
 batch_size = cfg.batch_size 
 
 
@@ -43,12 +45,13 @@ def train(model, supervisor):
                 tensors = [model.train_op,
                            model.tf_margin_loss,
                            model.tf_accuracy]
-                _, loss, acc = sess.run(tensors, feed_dict)
+                # _, loss, acc = sess.run(tensors, feed_dict=feed_dict)
 
                 # set new starting index for next batch
                 start_index += batch_size
 
 def main(_):
+    serialize_data(train_zip, training_filename)
     tf.logging.info("Starting training")
     model = CapsNet()
     sv = tf.train.Supervisor(graph=model.graph, logdir=cfg.logdir, save_model_secs=0)

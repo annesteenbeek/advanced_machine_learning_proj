@@ -10,40 +10,40 @@ class CapsNet(object):
 
     def __init__(self):
         self.graph = tf.Graph()
+        with self.graph.as_default():
+            nwidth = cfg.nwidth
+            nheight = cfg.nheight
+            self.tf_images = tf.placeholder(tf.float32, [None, nwidth, nheight, 3], name='images')
+            self.tf_labels = tf.placeholder(tf.int64, [None], name='labels')
 
-        nwidth = cfg.nwidth
-        nheight = cfg.nheight
-        self.tf_images = tf.placeholder(tf.float32, [None, nwidth, nheight, 3], name='images')
-        self.tf_labels = tf.placeholder(tf.int64, [None], name='labels')
+            # Translate labels to one hot array
+            one_hot_labels = tf.one_hot(self.tf_labels, depth=cfg.nb_labels)
 
-        # Translate labels to one hot array
-        one_hot_labels = tf.one_hot(self.tf_labels, depth=cfg.nb_labels)
+            # Build the model
+            self.caps1, self.caps2 = self.build_main_network(self.tf_images)
+            self.decoder = self._build_decoder(self.caps2, one_hot_labels, cfg.batch_size)
+            self._summary()
 
-        # Build the model
-        self.caps1, self.caps2 = self.build_main_network(self.tf_images)
-        self.decoder = self._build_decoder(self.caps2, one_hot_labels, cfg.batch_size)
-        self._summary()
+            # Build the loss
+            _loss = self._build_loss(self.caps2,
+                                one_hot_labels,
+                                self.tf_labels,
+                                self.decoder,
+                                self.tf_images)
+            (self.tf_loss_squared_rec,
+            self.tf_margin_loss_sum,
+            self.tf_predicted_class,
+            self.tf_correct_prediction,
+            self.tf_accuracy,
+            self.tf_loss,
+            self.tf_margin_loss,
+            self.tf_reconstruction_loss) = _loss
 
-        # Build the loss
-        _loss = self._build_loss(self.caps2,
-                            one_hot_labels,
-                            self.tf_labels,
-                            self.decoder,
-                            self.tf_images)
-        (self.tf_loss_squared_rec,
-        self.tf_margin_loss_sum,
-        self.tf_predicted_class,
-        self.tf_correct_prediction,
-        self.tf_accuracy,
-        self.tf_loss,
-        self.tf_margin_loss,
-        self.tf_reconstruction_loss) = _loss
-
-        # setup the optimizer
-        self.global_step = tf.Variable(0, name='global_step', trainable=False)
-        self.optimizer = tf.train.AdamOptimizer()
-        self.train_op = self.optimizer.minimize(self.tf_loss, global_step=self.global_step)
-    
+            # setup the optimizer
+            self.global_step = tf.Variable(0, name='global_step', trainable=False)
+            self.optimizer = tf.train.AdamOptimizer()
+            self.train_op = self.optimizer.minimize(self.tf_loss, global_step=self.global_step)
+        
     def build_main_network(self, images_ph):
         '''Create the main network'''
         # First block:

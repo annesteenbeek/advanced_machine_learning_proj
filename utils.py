@@ -7,12 +7,15 @@ from zipfile import ZipFile
 from io import BytesIO
 from scipy.stats import itemfreq
 import pandas as pd
+import tensorflow as tf
+from tqdm import tqdm
 
 
 def serialize_data(archivename, outname):
     # Make sure file has not already been serialezed
+    tf.logging.info("Creating serialized file format for " + archivename)
     if os.path.isfile(outname):
-        print "pickle file already exists, exiting"
+        tf.logging.info("pickle file already exists, continueing")
         return
     nwidth = cfg.nwidth
     nheight = cfg.nheight
@@ -21,7 +24,7 @@ def serialize_data(archivename, outname):
     #nwigth x nheight = number of features because images are nwigth x nheight pixels in RGB
     s = (len(archivezip.namelist()[:])-1, nwidth, nheight,3) 
     allImages = np.zeros(s)
-    for i in range(1,len(archivezip.namelist()[:])):
+    for i in tqdm(range(1,len(archivezip.namelist()[:]))) :
         imagename = BytesIO(archivezip.read(archivezip.namelist()[i]))
         image = PIL.Image.open(imagename)
         allImages[i-1] = preprocess_data(image, nwidth, nheight)
@@ -73,17 +76,24 @@ def get_data(image_file, label_file, top_breeds=None):
 
     return images_filtred, labels_filtered
 
-def next_batch(images, labels, batch_size, start_index=None):
+def next_batch(all_images, all_labels, batch_size, start_index=None):
     """
     Returns a subset of data which can be randomized or not,
     If not randomized, give starting index
     """
-    n_images = len(images)
+    n_images = len(all_images)
     if start_index is None:
-        indexes = np.arange(0, n_images)
+        idx = np.arange(0, n_images)
+        np.random.shuffle(idx)
     else: 
-        indexes = np.arange(start_index, start_index+batch_size) % n_images
+        idx = np.arange(start_index, start_index+batch_size) % n_images
+        
+    # all_labels = np.asarray(all_labels["breed"])
+    # Convert label strings to numbers
+    all_labels = np.asarray(all_labels['breed'].astype('category').cat.codes)
 
-    return images[indexes, :, :, :], labels[indexes]
+    x = [all_images[i] for i in idx]
+    y = [all_labels[i] for i in idx]
+    
 
-
+    return np.asarray(x), np.asarray(y)
