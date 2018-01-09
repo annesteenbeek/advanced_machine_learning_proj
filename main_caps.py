@@ -51,7 +51,7 @@ def train(model):
 
                 # set new starting index for next batch
                 start_index += batch_size
-            print acc
+            print "Loss: %.4f, Acc: %.4f" % (loss, acc)
 
 def main(_):
     serialize_data(train_zip, training_filename)
