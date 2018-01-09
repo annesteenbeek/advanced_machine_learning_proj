@@ -18,7 +18,7 @@ nbreeds = cfg.nb_labels
 batch_size = cfg.batch_size 
 
 
-def train(model, supervisor):
+def train(model):
     x_train, y_train = get_data(training_filename, labels_filename, nbreeds)
     # x_valid, y_valid = get_data(validation_filename, labels_filename, nbreeds)
 
@@ -26,12 +26,14 @@ def train(model, supervisor):
 
     config = tf.ConfigProto()
     config.gpu_options.allow_growth = True
-    with supervisor.managed_session(config=config) as sess:
+
+    with model.graph.as_default():
+
+        sess = tf.Session()
+        sess.run(tf.global_variables_initializer())
+
         for epoch in range(cfg.epochs):
-            if supervisor.should_stop():
-                print('supervisor stopped!')
-                break
-            
+
             start_index = 0
             for step in tqdm(range(n_batches), total=n_batches, ncols=70, leave=False, unit='b'):
 
@@ -43,19 +45,21 @@ def train(model, supervisor):
                     model.tf_labels: y_batch
                 }
                 tensors = [model.train_op,
-                           model.tf_margin_loss,
-                           model.tf_accuracy]
-                # _, loss, acc = sess.run(tensors, feed_dict=feed_dict)
+                            model.tf_margin_loss,
+                            model.tf_accuracy]
+                _, loss, acc = sess.run(tensors, feed_dict=feed_dict)
 
                 # set new starting index for next batch
                 start_index += batch_size
+            print acc
 
 def main(_):
     serialize_data(train_zip, training_filename)
     tf.logging.info("Starting training")
     model = CapsNet()
-    sv = tf.train.Supervisor(graph=model.graph, logdir=cfg.logdir, save_model_secs=0)
-    train(model, sv)
+    # sv = tf.train.Supervisor(graph=model.graph, logdir=cfg.logdir, save_model_secs=0)
+    # train(model, sv)
+    train(model)
 
 
 if __name__ == "__main__":

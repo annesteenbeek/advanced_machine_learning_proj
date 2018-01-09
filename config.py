@@ -16,10 +16,10 @@ flags.DEFINE_integer("caps_2_vec_len", 32,'description')
 # flags.DEFINE_integer("caps_2_vec_len", 60,'description')
 flags.DEFINE_float("learning_rate", 0.0001,'description')
 flags.DEFINE_integer("routing_steps", 1, 'description')
-flags.DEFINE_integer("nb_labels", 4, "Amount of labels to train")
+flags.DEFINE_integer("nb_labels", 10, "Amount of labels to train")
 flags.DEFINE_integer("nwidth", 32, "Transform image width")
 flags.DEFINE_integer("nheight", 32, "Transform image height")
-flags.DEFINE_integer("batch_size", 1, "Size of each batch")
-flags.DEFINE_integer("epochs", 10, "Amount of iterations of training data")
+flags.DEFINE_integer("batch_size", 50, "Size of each batch")
+flags.DEFINE_integer("epochs", 50, "Amount of iterations of training data")
 
 cfg = tf.app.flags.FLAGS
