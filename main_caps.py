@@ -10,7 +10,7 @@ tf.logging.set_verbosity("INFO")
 root_dir = "/home/anne/src/dog_identification/"  
 train_zip = root_dir + "data/train.zip"
 valid_zip = root_dir + "data/valid.zip"
-training_filename = root_dir + "data/train.p"
+training_filename_p = root_dir + "data/train.p"
 validation_filename = root_dir + "data/valid.p"
 labels_filename = root_dir + "data/labels.csv.zip"
 
@@ -19,7 +19,8 @@ batch_size = cfg.batch_size
 
 
 def train(model):
-    x_train, y_train = get_data(training_filename, labels_filename, nbreeds)
+    x_train, y_train, breed_codes = get_data(training_filename_p, labels_filename, nbreeds)
+    tf.logging.info("Training for %d breeds, using %d images" % (nbreeds, x_train.shape[0]))
     # x_valid, y_valid = get_data(validation_filename, labels_filename, nbreeds)
 
     n_batches = len(x_train)//batch_size # amount of batches in entire training set
@@ -54,11 +55,10 @@ def train(model):
             print "Loss: %.4f, Acc: %.4f" % (loss, acc)
 
 def main(_):
-    serialize_data(train_zip, training_filename)
+    serialize_data(train_zip, labels_filename, training_filename_p)
     tf.logging.info("Starting training")
     model = CapsNet()
-    # sv = tf.train.Supervisor(graph=model.graph, logdir=cfg.logdir, save_model_secs=0)
-    # train(model, sv)
+    # model = ConvNet()
     train(model)
 
 
