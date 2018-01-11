@@ -82,7 +82,7 @@ def get_data(image_file, label_file, top_breeds=None):
 
     # translate all breeds to their corresponding code
     labels_codes = labels_raw['breed'].astype('category').cat.codes.as_matrix()
-    labels_codes = labels_codes.reshape(labels_codes.shape[0], 1)
+    # labels_codes = labels_codes.reshape(labels_codes.shape[0], 1)
 
     labels_raw_np = labels_raw["breed"].as_matrix() #transform in numpy
     labels_raw_np = labels_raw_np.reshape(labels_raw_np.shape[0],1)

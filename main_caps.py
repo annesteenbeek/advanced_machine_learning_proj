@@ -23,7 +23,8 @@ def train(model):
     tf.logging.info("Training for %d breeds, using %d images" % (nbreeds, x_train.shape[0]))
     # x_valid, y_valid = get_data(validation_filename, labels_filename, nbreeds)
 
-    n_batches = len(x_train)//batch_size # amount of batches in entire training set
+    # n_batches = len(x_train)//batch_size # amount of batches in entire training set
+    n_batches = 50 # Amount of batches per epoch
 
     config = tf.ConfigProto()
     config.gpu_options.allow_growth = True

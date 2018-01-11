@@ -2,27 +2,7 @@ import tensorflow as tf
 import numpy as np
 from config import cfg
 
-
-# - Convolutional Layer n°1 with 32 filters
-#  + Max pooling
-#  + Relu
-# - Convolutional Layer n°2 with 64 filters
-#  + Max pooling
-#  + Relu
-# - Convolutional Layer n°3 with 128 filters
-#  + Max pooling
-#  + Relu
-#  + DropOut
-# - Flatten Layer
-# - Fully Connected Layer with 500 nodes
-#  + Relu
-#  + DropOut
-# - Fully Connected Layer with n nodes (n = number of breeds)   
-
-
 class ConvModel(object):
-
-
 
     def __init__(self):
         filter_size1 = cfg.filter_size1
@@ -40,38 +20,41 @@ class ConvModel(object):
         with self.graph.as_default():
             self.tf_images = tf.placeholder(tf.float32, shape=[None, img_size, img_size, num_channels], name='images')
             x_image = tf.reshape(self.tf_images, [-1, img_size, img_size, num_channels]) #-1 put everything as 1 array
-            self.tf_labels= tf.placeholder(tf.float32, shape=[None, num_classes], name='labels')
-            y_true_cls = tf.argmax(self.tf_labels, axis=1)
+            self.tf_labels= tf.placeholder(tf.int64, shape=[None], name='labels')
+            one_hot_labels = tf.one_hot(self.tf_labels, depth=num_classes)
 
-            keep_prob_fc=tf.placeholder(tf.float32)
-            keep_prob_conv=tf.placeholder(tf.float32)
+            y_true_cls = tf.argmax(one_hot_labels, axis=1)
 
-            layer_conv1, weights_conv1 = new_conv_layer(input=x_image,
+            self.keep_prob_fc=tf.placeholder(tf.float32)
+            self.keep_prob_conv=tf.placeholder(tf.float32)
+
+            layer_conv1, weights_conv1 = self.new_conv_layer(input=x_image,
                                 num_input_channels=num_channels,
                                 filter_size=filter_size1,
                                 num_filters=num_filters1,
                                 use_pooling=True,
                                 use_dropout=False)
                     
-            layer_conv2, weights_conv2 = new_conv_layer(input=layer_conv1,
+            layer_conv2, weights_conv2 = self.new_conv_layer(input=layer_conv1,
                             num_input_channels=num_filters1,
                             filter_size=filter_size2,
                             num_filters=num_filters2,
                             use_pooling=True,
                             use_dropout=False)
                 
-            layer_conv3, weights_conv3 = new_conv_layer(input=layer_conv2,
+            layer_conv3, weights_conv3 = self.new_conv_layer(input=layer_conv2,
                             num_input_channels=num_filters2,
                             filter_size=filter_size3,
                             num_filters=num_filters3,
                             use_pooling=True,
                             use_dropout=True)
-            layer_fc1 = new_fc_layer(input=layer_flat,
+            layer_flat, num_features = self.flatten_layer(layer_conv3)
+            layer_fc1 = self.new_fc_layer(input=layer_flat,
                             num_inputs=num_features,
                             num_outputs=fc_size,
                             use_relu=True,
                             use_dropout=True)
-            layer_fc2 = new_fc_layer(input=layer_fc1,
+            layer_fc2 = self.new_fc_layer(input=layer_fc1,
                             num_inputs=fc_size,
                             num_outputs=num_classes,
                             use_relu=False,
@@ -81,21 +64,17 @@ class ConvModel(object):
             y_pred_cls = tf.argmax(y_pred, axis=1)
 
             cross_entropy = tf.nn.softmax_cross_entropy_with_logits(logits=layer_fc2,
-                                                                    labels=y_true)
+                                                                    labels=one_hot_labels)
             self.cost = tf.reduce_mean(cross_entropy)
 
             self.train_op = tf.train.AdamOptimizer(learning_rate=1e-4).minimize(self.cost)
             correct_prediction = tf.equal(y_pred_cls, y_true_cls)
             self.accuracy = tf.reduce_mean(tf.cast(correct_prediction, tf.float32))
 
-
-    
-            layer_flat, num_features = flatten_layer(layer_conv3)
-
-    def new_conv_layer(input,              # The previous layer.
-                    num_input_channels, # Num. channels in prev. layer.
-                    filter_size,        # Width and height of each filter.
-                    num_filters,        # Number of filters.
+    def new_conv_layer(self, input,           
+                    num_input_channels,
+                    filter_size,       
+                    num_filters,       
                     use_pooling=True,
                     use_dropout=True):  # Use 2x2 max-pooling.
 
@@ -104,10 +83,10 @@ class ConvModel(object):
         shape = [filter_size, filter_size, num_input_channels, num_filters]
 
         # Create new weights aka. filters with the given shape.
-        weights = new_weights(shape=shape)
+        weights = self.new_weights(shape=shape)
 
         # Create new biases, one for each filter.
-        biases = new_biases(length=num_filters)
+        biases = self.new_biases(length=num_filters)
 
         # Create the TensorFlow operation for convolution.
         # Note the strides are set to 1 in all dimensions.
@@ -144,7 +123,7 @@ class ConvModel(object):
         layer = tf.nn.relu(layer)
         
         if use_dropout:
-            layer = tf.nn.dropout(layer,keep_prob_conv)
+            layer = tf.nn.dropout(layer,self.keep_prob_conv)
 
         # Note that ReLU is normally executed before the pooling,
         # but since relu(max_pool(x)) == max_pool(relu(x)) we can
@@ -155,7 +134,7 @@ class ConvModel(object):
         return layer, weights
 
 
-    def flatten_layer(layer):
+    def flatten_layer(self, layer):
         # Get the shape of the input layer.
         layer_shape = layer.get_shape()
 
@@ -180,15 +159,15 @@ class ConvModel(object):
         return layer_flat, num_features
 
 
-    def new_fc_layer(input,          # The previous layer.
+    def new_fc_layer(self, input,          # The previous layer.
                     num_inputs,     # Num. inputs from prev. layer.
                     num_outputs,    # Num. outputs.
                     use_relu=True,
                     use_dropout=True): # Use Rectified Linear Unit (ReLU)?
 
         # Create new weights and biases.
-        weights = new_weights(shape=[num_inputs, num_outputs])
-        biases = new_biases(length=num_outputs)
+        weights = self.new_weights(shape=[num_inputs, num_outputs])
+        biases = self.new_biases(length=num_outputs)
 
         # Calculate the layer as the matrix multiplication of
         # the input and weights, and then add the bias-values.
@@ -199,8 +178,14 @@ class ConvModel(object):
             layer = tf.nn.relu(layer)
         
         if use_dropout:
-            layer = tf.nn.dropout(layer,keep_prob_fc)
+            layer = tf.nn.dropout(layer,self.keep_prob_fc)
             
         return layer
 
 
+    def new_weights(self, shape):
+        return tf.Variable(tf.truncated_normal(shape, stddev=0.05))
+    #outputs random value from a truncated normal distribution
+
+    def new_biases(self, length):
+        return tf.Variable(tf.constant(0.05, shape=[length]))

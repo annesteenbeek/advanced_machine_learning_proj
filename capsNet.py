@@ -14,7 +14,7 @@ class CapsNet(object):
             nwidth = cfg.nwidth
             nheight = cfg.nheight
             self.tf_images = tf.placeholder(tf.float32, [None, nwidth, nheight, 3], name='images')
-            self.tf_labels = tf.placeholder(tf.int64, [None,1], name='labels')
+            self.tf_labels = tf.placeholder(tf.int64, [None], name='labels')
 
             # Translate labels to one hot array
             one_hot_labels = tf.one_hot(self.tf_labels, depth=cfg.nb_labels)
