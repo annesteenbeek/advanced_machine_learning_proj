@@ -22,4 +22,18 @@ flags.DEFINE_integer("nheight", 32, "Transform image height")
 flags.DEFINE_integer("batch_size", 50, "Size of each batch")
 flags.DEFINE_integer("epochs", 50, "Amount of iterations of training data")
 
+# Convolutional model
+flags.DEFINE_integer("filter_size1", 5, "Convolution filters are 5 x 5 pixels.")
+flags.DEFINE_integer("num_filters1", 32, "There are 32 of these filters.")
+
+# Convolutional Layer 2.
+flags.DEFINE_integer("filter_size2", 4, "Convolution filters are 4 x 4 pixels.")
+flags.DEFINE_integer("num_filters2", 64, "There are 64 of these filters.")
+
+# Convolutional Layer 3.
+flags.DEFINE_integer("filter_size3", 3, "Convolution filters are 3 x 3 pixels.")
+flags.DEFINE_integer("num_filters3", 128, "There are 128 of these filters.")
+
+# Fully-connected layer.
+flags.DEFINE_integer("fc_size", 500, "Size of fully connected layer")
 cfg = tf.app.flags.FLAGS

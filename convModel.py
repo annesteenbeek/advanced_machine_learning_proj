@@ -1,57 +1,96 @@
-class ConvModel(object):
-    
-    def __init__(self):
-        x = tf.placeholder(tf.float32, shape=[None, img_size, img_size, num_channels], name='x')
-        x_image = tf.reshape(x, [-1, img_size, img_size, num_channels]) #-1 put everything as 1 array
-        y_true = tf.placeholder(tf.float32, shape=[None, num_classes], name='y_true')
-        y_true_cls = tf.argmax(y_true, axis=1)
-        keep_prob_fc=tf.placeholder(tf.float32)
-        keep_prob_conv=tf.placeholder(tf.float32)
+import tensorflow as tf
+import numpy as np
+from config import cfg
 
-        layer_conv1, weights_conv1 =     new_conv_layer(input=x_image,
-                            num_input_channels=num_channels,
-                            filter_size=filter_size1,
-                            num_filters=num_filters1,
+
+# - Convolutional Layer n°1 with 32 filters
+#  + Max pooling
+#  + Relu
+# - Convolutional Layer n°2 with 64 filters
+#  + Max pooling
+#  + Relu
+# - Convolutional Layer n°3 with 128 filters
+#  + Max pooling
+#  + Relu
+#  + DropOut
+# - Flatten Layer
+# - Fully Connected Layer with 500 nodes
+#  + Relu
+#  + DropOut
+# - Fully Connected Layer with n nodes (n = number of breeds)   
+
+
+class ConvModel(object):
+
+
+
+    def __init__(self):
+        filter_size1 = cfg.filter_size1
+        num_filters1 = cfg.num_filters1
+        filter_size2 = cfg.filter_size2
+        num_filters2 = cfg.num_filters2
+        filter_size3 = cfg.filter_size3
+        num_filters3 = cfg.num_filters3
+        fc_size = cfg.fc_size
+        img_size = cfg.nwidth
+        num_classes = cfg.nb_labels
+        num_channels = 3 # rgb
+
+        self.graph = tf.Graph()
+        with self.graph.as_default():
+            self.tf_images = tf.placeholder(tf.float32, shape=[None, img_size, img_size, num_channels], name='images')
+            x_image = tf.reshape(self.tf_images, [-1, img_size, img_size, num_channels]) #-1 put everything as 1 array
+            self.tf_labels= tf.placeholder(tf.float32, shape=[None, num_classes], name='labels')
+            y_true_cls = tf.argmax(self.tf_labels, axis=1)
+
+            keep_prob_fc=tf.placeholder(tf.float32)
+            keep_prob_conv=tf.placeholder(tf.float32)
+
+            layer_conv1, weights_conv1 = new_conv_layer(input=x_image,
+                                num_input_channels=num_channels,
+                                filter_size=filter_size1,
+                                num_filters=num_filters1,
+                                use_pooling=True,
+                                use_dropout=False)
+                    
+            layer_conv2, weights_conv2 = new_conv_layer(input=layer_conv1,
+                            num_input_channels=num_filters1,
+                            filter_size=filter_size2,
+                            num_filters=num_filters2,
                             use_pooling=True,
                             use_dropout=False)
                 
-        layer_conv2, weights_conv2 =     new_conv_layer(input=layer_conv1,
-                        num_input_channels=num_filters1,
-                        filter_size=filter_size2,
-                        num_filters=num_filters2,
-                        use_pooling=True,
-                        use_dropout=False)
-            
-        layer_conv3, weights_conv3 =     new_conv_layer(input=layer_conv2,
-                        num_input_channels=num_filters2,
-                        filter_size=filter_size3,
-                        num_filters=num_filters3,
-                        use_pooling=True,
-                        use_dropout=True)
-        layer_fc1 = new_fc_layer(input=layer_flat,
-                        num_inputs=num_features,
-                        num_outputs=fc_size,
-                        use_relu=True,
-                        use_dropout=True)
-        layer_fc2 = new_fc_layer(input=layer_fc1,
-                        num_inputs=fc_size,
-                        num_outputs=num_classes,
-                        use_relu=False,
-                        use_dropout=False)
-        y_pred = tf.nn.softmax(layer_fc2)
-        y_pred_cls = tf.argmax(y_pred, axis=1)
+            layer_conv3, weights_conv3 = new_conv_layer(input=layer_conv2,
+                            num_input_channels=num_filters2,
+                            filter_size=filter_size3,
+                            num_filters=num_filters3,
+                            use_pooling=True,
+                            use_dropout=True)
+            layer_fc1 = new_fc_layer(input=layer_flat,
+                            num_inputs=num_features,
+                            num_outputs=fc_size,
+                            use_relu=True,
+                            use_dropout=True)
+            layer_fc2 = new_fc_layer(input=layer_fc1,
+                            num_inputs=fc_size,
+                            num_outputs=num_classes,
+                            use_relu=False,
+                            use_dropout=False)
 
-        cross_entropy = tf.nn.softmax_cross_entropy_with_logits(logits=layer_fc2,
-                                                                labels=y_true)
-        cost = tf.reduce_mean(cross_entropy)
+            y_pred = tf.nn.softmax(layer_fc2)
+            y_pred_cls = tf.argmax(y_pred, axis=1)
 
-        optimizer = tf.train.AdamOptimizer(learning_rate=1e-4).minimize(cost)
-        correct_prediction = tf.equal(y_pred_cls, y_true_cls)
-        accuracy = tf.reduce_mean(tf.cast(correct_prediction, tf.float32))
+            cross_entropy = tf.nn.softmax_cross_entropy_with_logits(logits=layer_fc2,
+                                                                    labels=y_true)
+            self.cost = tf.reduce_mean(cross_entropy)
+
+            self.train_op = tf.train.AdamOptimizer(learning_rate=1e-4).minimize(self.cost)
+            correct_prediction = tf.equal(y_pred_cls, y_true_cls)
+            self.accuracy = tf.reduce_mean(tf.cast(correct_prediction, tf.float32))
 
 
- 
-        layer_flat, num_features = flatten_layer(layer_conv3)
+    
+            layer_flat, num_features = flatten_layer(layer_conv3)
 
     def new_conv_layer(input,              # The previous layer.
                     num_input_channels, # Num. channels in prev. layer.
