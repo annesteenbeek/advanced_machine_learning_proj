@@ -9,6 +9,7 @@ from scipy.stats import itemfreq
 import pandas as pd
 import tensorflow as tf
 from tqdm import tqdm
+import matplotlib.pyplot as plt
 
 
 def serialize_data(trainfile, labelfile, outname):
@@ -36,7 +37,7 @@ def serialize_data(trainfile, labelfile, outname):
     allImages = np.zeros(s)
 
     # Iterate over labels to make sure numpy array has same indexes as labels
-    for index, row in tqdm(labels.iterrows(), total=len(labels.index)): 
+    for index, row in tqdm(labels.iterrows(), total=len(labels.index), ncols=70): 
         imagename = 'train/' + row['id'] + ".jpg"
         imagename = BytesIO(archivezip.read(imagename))
         image = PIL.Image.open(imagename)
@@ -93,6 +94,7 @@ def get_data(image_file, label_file, top_breeds=None):
     # Get the labels, and get the images
     label_codes_filtered = labels_codes[main_indexes]
 
+    tf.logging.info("Loading pickle file %s" % image_file)
     images = pickle.load(open(image_file, "rb")) # load the pickle file
     images_filtred = images[main_indexes,:,:,:]   
 
@@ -115,12 +117,41 @@ def next_batch(all_images, all_labels, batch_size, start_index=None):
     
     return np.asarray(x), np.asarray(y)
 
+def plot_images(images, cls_true, cls_pred=None):
+    assert len(images) == len(cls_true) == 12
+    
+    # Create figure with 3x3 sub-plots.
+    fig, axes = plt.subplots(4, 3)
+    fig.subplots_adjust(hspace=0.3, wspace=0.3)
+
+    for i, ax in enumerate(axes.flat):
+        # Plot image.
+        ax.imshow(images[i].reshape((cfg.nwidth,cfg.nheight,3)), cmap='binary')
+
+        # Show true and predicted classes.
+        if cls_pred is None:
+            # xlabel = "True: {0}".format(cls_true[i])
+            xlabel = cls_true[i]
+
+        else:
+            xlabel = "True: {0}, Pred: {1}".format(cls_true[i], cls_pred[i])
+
+        # Show the classes as the label on the x-axis.
+        ax.set_xlabel(xlabel)
+        
+        # Remove ticks from the plot.
+        ax.set_xticks([])
+        ax.set_yticks([])
+    
+    # Ensure the plot is shown correctly with multiple plots
+    # in a single Notebook cell.
+    plt.show()
 
 if __name__ == "__main__":
     root_dir = "/home/anne/src/dog_identification/"  
     train_zip = root_dir + "data/train.zip"
     valid_zip = root_dir + "data/valid.zip"
-    training_filename_p = root_dir + "data/train.p"
+    training_filename_p = root_dir + "data/train_conv.p"
     validation_filename = root_dir + "data/valid.p"
     labels_filename = root_dir + "data/labels.csv.zip"
     serialize_data(train_zip, labels_filename, training_filename_p)
@@ -131,3 +162,5 @@ if __name__ == "__main__":
     print y_train.shape
     print x_batch.shape
     print y_batch.shape
+
+    plot_images(x_batch[12:24], [breed_codes[code] for code in y_batch[12:24]])

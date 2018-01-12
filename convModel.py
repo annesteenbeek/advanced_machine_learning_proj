@@ -71,6 +71,8 @@ class ConvModel(object):
             correct_prediction = tf.equal(y_pred_cls, y_true_cls)
             self.accuracy = tf.reduce_mean(tf.cast(correct_prediction, tf.float32))
 
+            self.summary = self.build_summary()
+
     def new_conv_layer(self, input,           
                     num_input_channels,
                     filter_size,       
@@ -189,3 +191,11 @@ class ConvModel(object):
 
     def new_biases(self, length):
         return tf.Variable(tf.constant(0.05, shape=[length]))
+
+    def build_summary(self):
+        summary_list = []
+        summary_list.append(tf.summary.scalar('train/accuracy', self.accuracy))
+        summary_list.append(tf.summary.image('example_img', self.tf_images))
+
+        return tf.summary.merge(summary_list)
+        

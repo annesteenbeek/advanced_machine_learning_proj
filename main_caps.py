@@ -1,16 +1,21 @@
 import tensorflow as tf
 from config import cfg
 from tqdm import tqdm
+import time
+from datetime import timedelta
 
 from capsNet import CapsNet
+from convModel import ConvModel
 from utils import get_data, serialize_data, next_batch
+
+from tensorflow.python import debug as tf_debug
 
 tf.logging.set_verbosity("INFO")    
 
 root_dir = "/home/anne/src/dog_identification/"  
 train_zip = root_dir + "data/train.zip"
 valid_zip = root_dir + "data/valid.zip"
-training_filename_p = root_dir + "data/train.p"
+training_filename_p = root_dir + "data/train_conv.p"
 validation_filename = root_dir + "data/valid.p"
 labels_filename = root_dir + "data/labels.csv.zip"
 
@@ -24,42 +29,58 @@ def train(model):
     # x_valid, y_valid = get_data(validation_filename, labels_filename, nbreeds)
 
     # n_batches = len(x_train)//batch_size # amount of batches in entire training set
-    n_batches = 50 # Amount of batches per epoch
+    n_batches = 5 # Amount of batches per epoch
 
     config = tf.ConfigProto()
     config.gpu_options.allow_growth = True
 
     with model.graph.as_default():
 
+        tf.logging.info("Starting training")
         sess = tf.Session()
         sess.run(tf.global_variables_initializer())
+        writer = tf.summary.FileWriter(cfg.logdir, sess.graph)
+
+        # For debugging
+        sess = tf_debug.LocalCLIDebugWrapperSession(sess)
 
         for epoch in range(cfg.epochs):
-
+            start_time = time.time()
             start_index = 0
             for step in tqdm(range(n_batches), total=n_batches, ncols=70, leave=False, unit='b'):
 
-                x_batch, y_batch = next_batch(x_train, y_train, batch_size, start_index)
+                x_batch, y_batch = next_batch(x_train, y_train, batch_size)
 
-                # train the model
-                feed_dict = {
-                    model.tf_images: x_batch,
-                    model.tf_labels: y_batch
-                }
-                tensors = [model.train_op,
-                            model.tf_margin_loss,
-                            model.tf_accuracy]
-                _, loss, acc = sess.run(tensors, feed_dict=feed_dict)
+                # # train the model
+                # feed_dict = {
+                #     model.tf_images: x_batch,
+                #     model.tf_labels: y_batch
+                # }
+                # tensors = [model.train_op,
+                #             model.tf_margin_loss,
+                #             model.tf_accuracy]
+                # _, loss, acc = sess.run(tensors, feed_dict=feed_dict)
+
+                feed_dict = {model.tf_images: x_batch,
+                             model.tf_labels: y_batch,
+                             model.keep_prob_conv: 0.3,
+                             model.keep_prob_fc: 0.4}
+                _, summary = sess.run([model.train_op, model.summary], feed_dict=feed_dict)
+
+                # summary = sess.run(model.summary, feed_dict=feed_dict)
+                writer.add_summary(summary, step)
 
                 # set new starting index for next batch
-                start_index += batch_size
-            print "Loss: %.4f, Acc: %.4f" % (loss, acc)
+                # start_index += batch_size
+            print("Epoch %d took %s" %(epoch, str(timedelta(seconds=int(round(time.time()-start_time))))))
+            # print "Loss: %.4f, Acc: %.4f" % (loss, acc)
+            acc = sess.run(model.accuracy, feed_dict)
+            print "Accuracy: %.4f" % acc
 
 def main(_):
     serialize_data(train_zip, labels_filename, training_filename_p)
-    tf.logging.info("Starting training")
-    model = CapsNet()
-    # model = ConvNet()
+    # model = CapsNet()
+    model = ConvModel()
     train(model)
 
 
