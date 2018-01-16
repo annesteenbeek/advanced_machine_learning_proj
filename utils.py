@@ -10,7 +10,7 @@ import pandas as pd
 import tensorflow as tf
 from tqdm import tqdm
 import matplotlib.pyplot as plt
-
+import seaborn as sns
 
 def serialize_data(trainfile, labelfile, outname):
     """
@@ -78,22 +78,22 @@ def get_data(image_file, label_file, top_breeds=None):
     else: # only take top frequent breeds
         main_labels = labels_freq_pd[:,0][0:top_breeds]
 
-    # get dictionary of numeric value for each breed
-    breed_codes = dict(enumerate(labels_raw['breed'].astype('category').cat.categories))
-
-    # translate all breeds to their corresponding code
-    labels_codes = labels_raw['breed'].astype('category').cat.codes.as_matrix()
-    # labels_codes = labels_codes.reshape(labels_codes.shape[0], 1)
-
+    
     labels_raw_np = labels_raw["breed"].as_matrix() #transform in numpy
     labels_raw_np = labels_raw_np.reshape(labels_raw_np.shape[0],1)
 
     # get indexes of main breeds
     main_indexes = labels_raw.index[labels_raw['breed'].isin(main_labels)].tolist()
 
-    # Get the labels, and get the images
-    label_codes_filtered = labels_codes[main_indexes]
+    main_breeds = labels_raw['breed'][main_indexes]
+    # get dictionary of numeric value for each breed
+    breed_codes = dict(enumerate(main_breeds.astype('category').cat.categories))
 
+    # translate all breeds to their corresponding code
+    label_codes_filtered = main_breeds.astype('category').cat.codes.as_matrix()
+    # labels_codes = labels_codes.reshape(labels_codes.shape[0], 1)
+
+    # Get the labels, and get the images
     tf.logging.info("Loading pickle file %s" % image_file)
     images = pickle.load(open(image_file, "rb")) # load the pickle file
     images_filtred = images[main_indexes,:,:,:]   
@@ -109,6 +109,7 @@ def next_batch(all_images, all_labels, batch_size, start_index=None):
     if start_index is None:
         idx = np.arange(0, n_images)
         np.random.shuffle(idx)
+        idx = idx[0:batch_size]
     else: 
         idx = np.arange(start_index, start_index+batch_size) % n_images
         
@@ -147,6 +148,24 @@ def plot_images(images, cls_true, cls_pred=None):
     # in a single Notebook cell.
     plt.show()
 
+def breed_overview(label_file):
+    labels = pd.read_csv(label_file,
+                            compression='zip', 
+                            header=0, 
+                            sep=',', 
+                            quotechar='"')    
+    yy = pd.value_counts(labels['breed'])
+
+    fig, ax = plt.subplots()
+    fig.set_size_inches(15, 9)
+    sns.set_style("whitegrid")
+
+    ax = sns.barplot(x = yy.index, y = yy, data = labels)
+    ax.set_xticklabels(ax.get_xticklabels(), rotation = 90, fontsize = 8)
+    ax.set(xlabel='Dog Breed', ylabel='Count')
+    ax.set_title('Distribution of Dog breeds')
+    plt.show()
+
 if __name__ == "__main__":
     root_dir = "/home/anne/src/dog_identification/"  
     train_zip = root_dir + "data/train.zip"
@@ -154,13 +173,16 @@ if __name__ == "__main__":
     training_filename_p = root_dir + "data/train_conv.p"
     validation_filename = root_dir + "data/valid.p"
     labels_filename = root_dir + "data/labels.csv.zip"
-    serialize_data(train_zip, labels_filename, training_filename_p)
-    x_train, y_train, breed_codes = get_data(training_filename_p, labels_filename, 5)
-    x_batch, y_batch = next_batch(x_train, y_train, 50, 0)
 
-    print x_train.shape
-    print y_train.shape
-    print x_batch.shape
-    print y_batch.shape
+    breed_overview(labels_filename)
 
-    plot_images(x_batch[12:24], [breed_codes[code] for code in y_batch[12:24]])
+    # serialize_data(train_zip, labels_filename, training_filename_p)
+    # x_train, y_train, breed_codes = get_data(training_filename_p, labels_filename, 5)
+    # x_batch, y_batch = next_batch(x_train, y_train, 50)
+
+    # print x_train.shape
+    # print y_train.shape
+    # print x_batch.shape
+    # print y_batch.shape
+
+    # plot_images(x_batch[12:24], [breed_codes[code] for code in y_batch[12:24]])

@@ -34,7 +34,7 @@ class CapsNet(object):
             self.tf_margin_loss_sum,
             self.tf_predicted_class,
             self.tf_correct_prediction,
-            self.tf_accuracy,
+            self.accuracy,
             self.tf_loss,
             self.tf_margin_loss,
             self.tf_reconstruction_loss) = _loss
