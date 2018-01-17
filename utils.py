@@ -12,24 +12,28 @@ from tqdm import tqdm
 import matplotlib.pyplot as plt
 import seaborn as sns
 
-def serialize_data(trainfile, labelfile, outname):
+def serialize_data(trainfile, labelfile, outname, img_size=None):
     """
     Create a serialized file format of a pandas dataframe for easy data retrieval.
     To save space, image preprocessing is also done here.
     """
 
     # Make sure file has not already been serialezed
-    tf.logging.info("Creating serialized file format for " + trainfile)
+    print("Creating serialized file format for " + trainfile)
     if os.path.isfile(outname):
-        tf.logging.info("pickle file already exists, continueing")
+        print("pickle file already exists, continueing")
         return
     labels = pd.read_csv(labelfile,
                         compression='zip', 
                         header=0, 
                         sep=',', 
                         quotechar='"')
-    nwidth = cfg.nwidth
-    nheight = cfg.nheight
+    if img_size is None:
+        nwidth = cfg.nwidth
+        nheight = cfg.nheight
+    else:
+        nwidth = img_size
+        nheight = img_size
     archivezip = ZipFile(trainfile, 'r')
 
     #nwigth x nheight = number of features because images are nwigth x nheight pixels in RGB
@@ -94,7 +98,7 @@ def get_data(image_file, label_file, top_breeds=None):
     # labels_codes = labels_codes.reshape(labels_codes.shape[0], 1)
 
     # Get the labels, and get the images
-    tf.logging.info("Loading pickle file %s" % image_file)
+    print("Loading pickle file %s" % image_file)
     images = pickle.load(open(image_file, "rb")) # load the pickle file
     images_filtred = images[main_indexes,:,:,:]   
 
