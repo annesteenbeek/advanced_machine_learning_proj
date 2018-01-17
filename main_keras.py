@@ -6,6 +6,8 @@ from keras.layers import Activation, Dropout, Flatten, Dense
 from keras.preprocessing.image import ImageDataGenerator
 from sklearn.model_selection import train_test_split
 
+import numpy as np
+
 root_dir = "/home/anne/src/dog_identification/"  
 train_zip = root_dir + "data/train.zip"
 valid_zip = root_dir + "data/valid.zip"
@@ -15,7 +17,8 @@ labels_filename = root_dir + "data/labels.csv.zip"
 
 num_validation = 0.3
 batch_size = 250
-epochs = 1000
+n_batches = 50
+epochs = 300
 n_breeds = 10
 
 nwidth = 60
@@ -26,8 +29,18 @@ def train():
     serialize_data(train_zip, labels_filename, training_filename, img_size=nwidth)
     x, y, breed_dict = get_data(training_filename, labels_filename, top_breeds=n_breeds)
     y_hot = keras.utils.to_categorical(y)
-    print y_hot.shape
+
     x_train, x_val, y_train, y_val = train_test_split(x, y_hot, test_size=num_validation, random_state=6)
+
+    # Eval train test sets
+    unique_train, freq_train = np.unique(y_train, return_counts=True)
+    unique_val, freq_val = np.unique(y_val, return_counts=True)
+
+    # Make sure every breed is included in both sets
+    assert (unique_train.shape[0]==unique_val.shape[0]), "Missing breeds in train/val sets"
+
+    print("Label frequency training set: max=%d, min=%d" % (np.amax(freq_train), np.amin(freq_train)))
+    print("Label frequency validation set: max=%d, min=%d" % (np.amax(freq_val), np.amin(freq_val)))
 
     nb_train_samples = x_train.shape[0]
     nb_val_samples = x_val.shape[0]
@@ -67,7 +80,7 @@ def train():
 
     print("Compiling model")
     model.compile(loss=keras.losses.categorical_crossentropy,
-              optimizer=keras.optimizers.Adadelta(),
+              optimizer=keras.optimizers.Adam(),
               metrics=['accuracy'])
 
     print("Starting generator")
