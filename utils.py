@@ -11,6 +11,7 @@ import tensorflow as tf
 from tqdm import tqdm
 import matplotlib.pyplot as plt
 import seaborn as sns
+import tables
 
 def serialize_data(trainfile, labelfile, outname, img_size=None):
     """
@@ -47,6 +48,94 @@ def serialize_data(trainfile, labelfile, outname, img_size=None):
         image = PIL.Image.open(imagename)
         allImages[index] = preprocess_data(image,nwidth, nheight)
     pickle.dump(allImages, open(outname, "wb"))
+
+def store_data_hdf5(train_file, label_file, store_file, store_size=300, train_val=1):
+    """ Store the entire dataset in hdf5 dataformat to allow for disk streaming. 
+    # Arguments
+        train_file: the zip containing the training data.
+        label_file: the zip containing the labels .csv file
+        store_file: the desired output file name.
+        store_size: the desired image size for storage
+        train_val: the desired training/validation size 
+    """
+    if os.path.isfile(store_file):
+        print("HDF5 file already exists, continueing")
+        return
+
+    labels = pd.read_csv(label_file,
+                    compression='zip', 
+                    header=0, 
+                    sep=',', 
+                    quotechar='"')
+    labels = labels.as_matrix() # convert to numpy array
+    nfiles = labels.shape[0]
+    max_train_idx = int(nfiles*train_val)
+
+    img_dtype = tables.UInt8Atom()  # dtype in which the images will be saved
+    # check the order of data and chose proper data shape to save images
+    data_shape = (0, store_size, store_size, 3)
+    # open a hdf5 file and create earrays
+    hdf5_file = tables.open_file(store_file, mode='w')
+    train_storage = hdf5_file.create_earray(hdf5_file.root, 'train_img', img_dtype, shape=data_shape)
+    val_storage = hdf5_file.create_earray(hdf5_file.root, 'val_img', img_dtype, shape=data_shape)
+
+    train_idx = np.arange(0,max_train_idx)
+    val_idx = np.arange(max_train_idx,nfiles)
+
+    # create the label arrays and copy the labels data in them
+    hdf5_file.create_array(hdf5_file.root, 'train_labels', labels[train_idx,1].tolist())
+    hdf5_file.create_array(hdf5_file.root, 'val_labels', labels[val_idx,1].tolist())
+
+    archivezip = ZipFile(train_file, 'r')
+    for index in tqdm(range(nfiles), total=nfiles, ncols=70): 
+        imagename = 'train/' + labels[index,0] + ".jpg"
+        image_buf = BytesIO(archivezip.read(imagename))
+        image = PIL.Image.open(image_buf)
+        image = image.resize((store_size, store_size))
+        image = np.array(image)
+        if index < max_train_idx:
+            train_storage.append(image[None])
+        else:
+            val_storage.append(image[None])
+    hdf5_file.close()
+
+def get_data_hdf5(hdf5_filename, n_breeds=None):
+    file = tables.open_file(hdf5_filename, mode='r')
+    train_labels = file.root.train_labels
+    val_labels = file.root.val_labels
+    labels = train_labels[:] + val_labels[:]
+    labels = np.array(labels)
+
+    top_breeds = get_top_breeds(labels,n_breeds)
+    train_idx = np.flatnonzero(np.in1d(train_labels, top_breeds)).tolist()
+    val_idx = np.flatnonzero(np.in1d(val_labels, top_breeds)).tolist()
+    x_train = file.root.train_img[train_idx,:,:,:]
+    x_val = file.root.val_img[val_idx,:,:,:]
+    y_train = labels[train_idx]
+    y_val = labels[val_idx]
+
+    file.close()
+
+    return x_train, x_val, y_train, y_val
+
+
+def image_generator(images, indexes, batch_size):
+    pass
+
+def hdf5_image_generator(filename, batch_size=32, n_breeds=None, image_preprocessor=None):
+    """ Generates batches of images from hdf5 file """
+    file = tables.open_file(filename, mode='r')
+
+
+def get_top_breeds(labels, n_breeds=None):
+    labels_freq = itemfreq(labels)
+    labels_freq = labels_freq[labels_freq[:, 1].astype(int).argsort()[::-1]] #[::-1] ==> to sort in descending order 
+    if n_breeds is None: # take all breeds
+        main_labels = labels_freq_pd[:,0][:]
+    else: # only take top frequent breeds
+        main_labels = labels_freq[:,0][0:n_breeds]
+    return main_labels
+
 
 def preprocess_data(image, nwidth, nheight):
     """ This function creates normalized, square images,
@@ -177,8 +266,15 @@ if __name__ == "__main__":
     training_filename_p = root_dir + "data/train_conv.p"
     validation_filename = root_dir + "data/valid.p"
     labels_filename = root_dir + "data/labels.csv.zip"
+    hdf5_file = root_dir + "data/images.hdf5"
 
-    breed_overview(labels_filename)
+    print('streaming to HDF5')
+    store_data_hdf5(train_zip, labels_filename, hdf5_file, train_val=0.7)
+    x_train, x_val, y_train, y_val = get_data_hdf5(hdf5_file,n_breeds=3)
+    print x_train.shape
+    # serialize_data(train_zip, labels_filename, 'data/train_full.p', img_size=300)
+
+    # breed_overview(labels_filename)
 
     # serialize_data(train_zip, labels_filename, training_filename_p)
     # x_train, y_train, breed_codes = get_data(training_filename_p, labels_filename, 5)
