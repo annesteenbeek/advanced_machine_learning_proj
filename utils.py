@@ -12,6 +12,9 @@ from tqdm import tqdm
 import matplotlib.pyplot as plt
 import seaborn as sns
 import tables
+import math
+
+from keras.applications import xception
 
 def serialize_data(trainfile, labelfile, outname, img_size=None):
     """
@@ -99,7 +102,7 @@ def store_data_hdf5(train_file, label_file, store_file, store_size=300, train_va
             val_storage.append(image[None])
     hdf5_file.close()
 
-def get_data_hdf5(hdf5_filename, n_breeds=None):
+def get_data_hdf5(hdf5_filename, n_breeds=None, preprocess_function=None):
     file = tables.open_file(hdf5_filename, mode='r')
     train_labels = file.root.train_labels
     val_labels = file.root.val_labels
@@ -111,27 +114,92 @@ def get_data_hdf5(hdf5_filename, n_breeds=None):
     val_idx = np.flatnonzero(np.in1d(val_labels, top_breeds)).tolist()
     x_train = file.root.train_img[train_idx,:,:,:]
     x_val = file.root.val_img[val_idx,:,:,:]
-    y_train = labels[train_idx]
-    y_val = labels[val_idx]
+    _, y_train = np.unique(train_labels[train_idx], return_inverse=True)
+    breed_dict, y_val = np.unique(val_labels[val_idx], return_inverse=True)
 
     file.close()
 
-    return x_train, x_val, y_train, y_val
+    return x_train, x_val, y_train, y_val, breed_dict
 
 
-def image_generator(images, indexes, batch_size):
-    pass
+def image_generator(images, indexes, batch_size, image_preprocessor=None):
+    indexes = np.array(indexes)
+    n_indexes = indexes.shape[0]
+    residual = n_indexes % batch_size # 
 
-def hdf5_image_generator(filename, batch_size=32, n_breeds=None, image_preprocessor=None):
+    start = 0
+    end = 0
+    while end < n_indexes:
+        end = min(end+batch_size, n_indexes)
+        index_batch = indexes[start:end] 
+        if image_preprocessor:
+            s = (len(index_batch),) + images.shape[1:] 
+            x = np.zeros(s)
+            for i in index_batch:
+                x[i] = image_preprocessor(images[i])
+        else:
+            x = images[index_batch, :, :, :]
+        yield x
+        start = end
+
+def hdf5_image_generator(filename, batch_size=32, n_breeds=None, image_preprocessor=None, training=True):
     """ Generates batches of images from hdf5 file """
-    file = tables.open_file(filename, mode='r')
+    with tables.open_file(filename, 'r') as f:
+        train_labels = f.root.train_labels
+        val_labels = f.root.val_labels
+        labels = train_labels[:] + val_labels[:]
+        labels = np.array(labels)
 
+        top_breeds = get_top_breeds(labels,n_breeds)
+        train_idx = get_breed_indexes(train_labels, top_breeds)
+        val_idx = get_breed_indexes(val_labels, top_breeds)
+
+        if training:
+            indexes = train_idx
+            images = f.root.train_img
+        else:
+            indexes = val_idx
+            images = f.root.val_img
+        indexes = np.array(indexes)
+        n_indexes = indexes.shape[0]
+        residual = n_indexes % batch_size # 
+
+        start = 0
+        end = 0
+        while end < n_indexes:
+            end = min(end+batch_size, n_indexes)
+            index_batch = indexes[start:end] 
+            if image_preprocessor:
+                s = (len(index_batch),) + images.shape[1:] 
+                x = np.zeros(s)
+                for j, index in enumerate(index_batch):
+                    x[j] = image_preprocessor(images[index])
+            else:
+                x = images[index_batch, :, :, :]
+            yield x
+            start = end
+
+        f.close()
+
+# class hdf5_image_generator(object):
+    
+#     def __init__(self, hdf5_file, batch_size=32, n_breeds=None, preprocessing_function=None):
+#         with tables.open_file(hdf5_file, mode="r") as f:
+#             self.n_files = get_top_breeds(f.root.train_labels, n_breeds)
+#             f.close()
+#         self.steps = math.ceil(float(self.n_files)/batch_size)
+
+#     def __len__(self):
+#         return self.steps
+
+def get_breed_indexes(labels, breeds):
+    return np.flatnonzero(np.in1d(labels, breeds)).tolist()
 
 def get_top_breeds(labels, n_breeds=None):
     labels_freq = itemfreq(labels)
     labels_freq = labels_freq[labels_freq[:, 1].astype(int).argsort()[::-1]] #[::-1] ==> to sort in descending order 
     if n_breeds is None: # take all breeds
-        main_labels = labels_freq_pd[:,0][:]
+        main_labels = labels_freq[:,0][:]
     else: # only take top frequent breeds
         main_labels = labels_freq[:,0][0:n_breeds]
     return main_labels
@@ -146,6 +214,37 @@ def preprocess_data(image, nwidth, nheight):
     image = np.clip(image/255.0, 0.0, 1.0)
 
     return image
+
+def get_steps(hdf5_file, batch_size, n_breeds):
+    with tables.open_file(hdf5_file, mode="r") as f:
+        train_labels = f.root.train_labels
+        val_labels = f.root.val_labels
+        labels = train_labels[:] + val_labels[:]
+        labels = np.array(labels)
+
+        top_breeds = get_top_breeds(labels,n_breeds)
+        train_idx = get_breed_indexes(train_labels, top_breeds)
+        val_idx = get_breed_indexes(val_labels, top_breeds)
+
+        train_steps = int(math.ceil(float(len(train_idx))/batch_size))
+        val_steps = int(math.ceil(float(len(val_idx))/batch_size))
+        f.close()
+    return train_steps, val_steps
+
+def get_labels(hdf5_file, n_breeds):
+    with tables.open_file(hdf5_file, mode="r") as f:
+        train_labels = f.root.train_labels
+        val_labels = f.root.val_labels
+        labels = np.array(train_labels[:] + val_labels[:])
+
+        top_breeds = get_top_breeds(labels,n_breeds)
+        train_idx = get_breed_indexes(train_labels, top_breeds)
+        val_idx = get_breed_indexes(val_labels, top_breeds)
+
+        _, y_train = np.unique(train_labels[train_idx], return_inverse=True)
+        breed_dict, y_val = np.unique(val_labels[val_idx], return_inverse=True)
+        f.close()
+    return y_train, y_val, breed_dict
 
 def get_data(image_file, label_file, top_breeds=None):
     """
@@ -259,6 +358,9 @@ def breed_overview(label_file):
     ax.set_title('Distribution of Dog breeds')
     plt.show()
 
+def preprocessing_function(img):
+    return xception.preprocess_input(np.expand_dims(img.astype(float).copy(), axis=0))
+
 if __name__ == "__main__":
     root_dir = "/home/anne/src/dog_identification/"  
     train_zip = root_dir + "data/train.zip"
@@ -270,8 +372,23 @@ if __name__ == "__main__":
 
     print('streaming to HDF5')
     store_data_hdf5(train_zip, labels_filename, hdf5_file, train_val=0.7)
-    x_train, x_val, y_train, y_val = get_data_hdf5(hdf5_file,n_breeds=3)
-    print x_train.shape
+    # x_train, x_val, y_train, y_val = get_data_hdf5(hdf5_file,n_breeds=3)
+    # print x_train.shape
+    x = hdf5_image_generator(hdf5_file, batch_size=15, n_breeds=4, image_preprocessor=preprocessing_function)
+    # xception_bottleneck = xception.Xception(weights = "imagenet", include_top=False, pooling='avg')
+    train_steps, val_steps = get_steps(hdf5_file, batch_size=15, n_breeds=4)
+    y_train, y_val = get_labels(hdf5_file, n_breeds=4)
+    print y_train.shape
+    print y_val.shape
+    
+    # train_x_bf = xception_bottleneck.predict_generator(x, steps=train_steps, verbose=1)
+
+    # count = 0
+    # for step in range(train_steps):
+    #     count +=1
+    #     a = next(x)
+    #     print count
+        # print a.shape
     # serialize_data(train_zip, labels_filename, 'data/train_full.p', img_size=300)
 
     # breed_overview(labels_filename)
